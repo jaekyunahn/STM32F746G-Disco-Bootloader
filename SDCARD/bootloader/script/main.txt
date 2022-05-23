@@ -1,0 +1,2 @@
+auto_boot=0;
+booting_logo=1;
