@@ -177,16 +177,10 @@ void bootloader_application(void)
 	//image read
 	// logo
 	bootloader_image[logo_image_number] = readBitmapFileToSdram("/bootloader/source/logo.bmp");
-	// window
-	bootloader_image[select_window_image_number] = readBitmapFileToSdram("/bootloader/source/window.bmp");
 	// booting 버튼
 	bootloader_image[boot_button_image_number] = readBitmapFileToSdram("/bootloader/source/Booting.bmp");
 	// download 버튼
 	bootloader_image[down_button_image_number] = readBitmapFileToSdram("/bootloader/source/Download.bmp");
-	// select 버튼
-	bootloader_image[select_button_image_number] = readBitmapFileToSdram("/bootloader/source/select.bmp");
-	// text bar
-	bootloader_image[text_bar_image_number] = readBitmapFileToSdram("/bootloader/source/text_bar.bmp");
 	// download_window_image_number
 	bootloader_image[download_window_image_number] = readBitmapFileToSdram("/bootloader/source/fwupdate.bmp");
 	
@@ -239,17 +233,6 @@ void bootloader_application(void)
 	// 설정 파일에서 자동 부팅이 비활성화로 되어 있으면 동작
 	if(bootconfig.autoboot == 0)
 	{
-		// 자동 부팅이 아닌 경우
-		// 메뉴 선택을 위한 윈도우 좌표 설정
-		bootloader_image[select_window_image_number].image_x_start_location = 50;
-		bootloader_image[select_window_image_number].image_y_start_location = 30;
-		enable_image[select_window_image_number] = 0;
-
-		// select button
-		//bootloader_image[select_button_image_number].image_x_start_location = 253;
-		//bootloader_image[select_button_image_number].image_y_start_location = 245;
-		//enable_image[select_button_image_number] = 1;
-
 		// down
 		bootloader_image[down_button_image_number].image_x_start_location = 329;
 		bootloader_image[down_button_image_number].image_y_start_location = 245;
@@ -282,10 +265,6 @@ void bootloader_application(void)
 				if(inside_location(420,431,30,43,ts_location_x,ts_location_y)){
 					bootloader_touch_event = close_window;
 				}
-				// 선택창 open 버튼 입력 -> 당장 사용 x
-				//if(inside_location(253,325,245,269,ts_location_x,ts_location_y)){
-				//	bootloader_touch_event = select_window;
-				//}
 				// booting 버튼 입력
 				if(inside_location(405,479,245,269,ts_location_x,ts_location_y)){
 					bootloader_touch_event = boot;
@@ -304,16 +283,8 @@ void bootloader_application(void)
 			{
 			case not_work:
 				break;
-			case select_window:
-				printf("[main]select_window\n");
-				if ((enable_image[select_window_image_number] == 0) && (enable_image[download_window_image_number] == 0))
-				{
-					enable_image[select_window_image_number] = 1;
-					bootloader_working_number = select_image;
-				}
-				break;
 			case boot:
-				if ((enable_image[select_window_image_number] == 0) && (enable_image[download_window_image_number] == 0)) 
+				if (enable_image[download_window_image_number] == 0)
 				{
 					printf("[main]boot\n");
 					bootloader_working_number = booting_now;
@@ -321,7 +292,7 @@ void bootloader_application(void)
 				break;
 			case download:
 				printf("[main]download\n");
-				if ((enable_image[select_window_image_number] == 0) && (enable_image[download_window_image_number] == 0))
+				if (enable_image[download_window_image_number] == 0)
 				{
 					enable_image[download_window_image_number] = 1;
 					bootloader_working_number = fw_download;
@@ -329,9 +300,6 @@ void bootloader_application(void)
 				break;
 			case close_window:
 				printf("[main]close_window\n");
-				if (enable_image[select_window_image_number] == 1) {
-					enable_image[select_window_image_number] = 0;
-				}
 				if (enable_image[download_window_image_number] == 1) {
 					enable_image[download_window_image_number] = 0;
 				}
