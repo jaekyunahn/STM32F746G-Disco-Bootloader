@@ -22,10 +22,10 @@
  /*
    *	Define
    */
-   // STM32 Flash Memory에 데이터 쓸때 SD Card에서 한번 읽을 크기
+// STM32 Flash Memory에 데이터 쓸때 SD Card에서 한번 읽을 크기
 #define WRITE_FLASH_SIZE 512
 // 수신 버퍼 최대 크기
-#define PACKET_MAX_SIZE 2048
+#define PACKET_MAX_SIZE 4500
 // fatfs 파일명 / 파일 주소 변수 최대 크기
 #define MAX_FILESYSTEM_LEN 256
 // load bmp image to sdram
@@ -46,6 +46,13 @@ char tmp[PACKET_MAX_SIZE] = "";
 int bootloader_working_number = bootloader_idel;
 // FW update 현재 흐름
 int fw_update_Mode = 0;
+
+// STM32 Flash Memory 기록할 데이터 버퍼
+char flash_write_buffer[WRITE_FLASH_SIZE] = "";
+// 파일명 -> uart로 받은 정보
+static char file_name[MAX_FILESYSTEM_LEN] = "";
+// 파일 주소 -> uart로 부터 받은 파일명을 특정 디렉터리 주소까지 결합 한 변수
+static char file_address[MAX_FILESYSTEM_LEN] = "";
 
 /*
  *  @brief	Bootloader Main Function
@@ -161,6 +168,7 @@ void bootloader_application(void)
 	// 터치 스크린 데이터를 실시간으로 받기 위해 타이머로 작업, 
 	// 타이머 인터럽트에서 call하는 함수는 bootloader.c의 callfunction_for_timer
 	HAL_TIM_Base_Start_IT(&htim11);
+	//HAL_TIM_Base_Stop_IT(&htim11);
 	printf("[Bootloader]timer start\n");
 
 #if 1
@@ -756,14 +764,6 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 	// 마지막 패킷 크기
 	static int last_packet_size = 0;
 
-	// STM32 Flash Memory 기록할 데이터 버퍼
-	char flash_write_buffer[WRITE_FLASH_SIZE] = "";
-
-	// 파일명 -> uart로 받은 정보
-	static char file_name[MAX_FILESYSTEM_LEN] = "";
-	// 파일 주소 -> uart로 부터 받은 파일명을 특정 디렉터리 주소까지 결합 한 변수
-	static char file_address[MAX_FILESYSTEM_LEN] = "";
-
 	// file object pointer
 	FIL filedownload;
 
@@ -803,6 +803,10 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 	// STM32 Flash Memory 쓰기 횟수
 	static int write_flash_count = 0;
 
+	// fatfs 쓰기 할 때 disk error 반복적으로 나오는 현상 해결 하기 위한 작업
+	static int Write_count_per_unit = 0;
+
+
 	if (fw_update_Mode == uart_communication)
 	{
 		// 패킷 끝부분 문자인 '\n'를 검색,
@@ -815,6 +819,11 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 			// HEAD 패킷은 file name , packet size , packet count , last packet data length , file size 로 구성되어 있다.
 			if ((fCompareFunction(incomingdata, "HEAD:", 5)) && (incomingdata[x] == '\n'))
 			{
+				// SD card에 저장 할 때 지속적인 Disk-error 나온 원인.. 타이머 11이 돌아 가고 있는 중에 뭐가 꼬이나...
+				// 아주 정확한 원인 찾을 수도 있겠지만 부트로더 특성 상 다운로드 중일때 잘못된 터치로 인한 오동작 방지겸,...
+				// Timer stop 시키고 동작 시키는 쪽으로 가닥 잡는다.
+				HAL_TIM_Base_Stop_IT(&htim11);
+
 				// 정적 변수 초기화
 				flash_write_start_address = 0;
 				flash_write_end_address = 0;
@@ -907,6 +916,7 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 				{
 					// 성공 시
 					printf("AH\n");
+					Write_count_per_unit = 0;
 				}
 			}
 			// DATA 패킷 처리
@@ -940,11 +950,11 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 						if (write_res.last_error_code != 0)
 						{
 							// 0.1초 delay
-							HAL_Delay(100);
+							HAL_Delay(50);
 							// 파일 오브젝트 닫기
 							f_close(&filedownload);
 							// 0.1초 delay
-							HAL_Delay(100);
+							HAL_Delay(50);
 							// 파일 마지막 부분 부터 쓰기로 open
 							write_res.last_error_code = f_open(&filedownload, file_address, FA_OPEN_APPEND | FA_WRITE);
 							write_res.last_error_function = 10;
@@ -953,6 +963,7 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 						}
 						else
 						{
+							f_sync(&filedownload);
 							// 다음 패킷을 위한 인덱스 증가
 							data_packet_Index++;
 							// 수신 양호
@@ -993,11 +1004,11 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 						if (write_res.last_error_code != 0)
 						{
 							// 0.1초 delay
-							HAL_Delay(100);
+							HAL_Delay(50);
 							// 파일 오브젝트 닫기
 							f_close(&filedownload);
 							// 0.1초 delay
-							HAL_Delay(100);
+							HAL_Delay(50);
 							// 파일 마지막 부분 부터 쓰기로 open
 							write_res.last_error_code = f_open(&filedownload, file_address, FA_OPEN_APPEND | FA_WRITE);
 							write_res.last_error_function = 10;
@@ -1006,6 +1017,7 @@ struct CURRENT_PROGRESS firmwareUpdate(void)
 						}
 						else
 						{
+							f_sync(&filedownload);
 							// 다음 패킷을 위한 인덱스 증가
 							data_packet_Index++;
 							// 수신 양호
